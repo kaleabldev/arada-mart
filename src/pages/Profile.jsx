@@ -13,7 +13,7 @@ import {
   Package,
   Loader2,
   Save,
-  Telegram
+  MessageCircle
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -168,7 +168,7 @@ export default function Profile() {
                 Telegram Handle (Optional)
               </label>
               <div className="relative">
-                <Telegram className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <MessageCircle className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                 <input
                   type="text"
                   value={formData.telegram_handle}
@@ -211,7 +211,7 @@ export default function Profile() {
             )}
             {profile.telegram_handle && (
               <p className="text-slate-300 flex items-center">
-                <Telegram size={16} className="mr-2" />
+                <MessageCircle size={16} className="mr-2" />
                 @{profile.telegram_handle}
               </p>
             )}
