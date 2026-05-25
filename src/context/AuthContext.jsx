@@ -10,7 +10,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -20,10 +19,7 @@ export function AuthProvider({ children }) {
       }
     })
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
         await fetchProfile(session.user.id)
@@ -55,31 +51,23 @@ export function AuthProvider({ children }) {
 
   const signUp = async (email, password, name) => {
     try {
+      // We pass the name in options.data so the DB trigger can use it
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: { name }
+        }
       })
 
       if (error) throw error
 
+      // Welcome email is sent separately; profile is created by DB trigger
       if (data.user) {
-        // Create profile
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: data.user.id,
-          email: data.user.email,
-          name,
-          free_listings_used: 0,
-          credits: 0,
-          role: 'user',
-        })
-
-        if (profileError) throw profileError
-
-        // Send welcome email
         try {
           await sendWelcomeEmail(email, name)
         } catch (emailErr) {
-          console.error('Failed to send welcome email:', emailErr)
+          console.error('Email notification error:', emailErr)
         }
       }
 
@@ -103,8 +91,7 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      await supabase.auth.signOut()
       setUser(null)
       setProfile(null)
     } catch (error) {
@@ -129,8 +116,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const isAdmin = profile?.role === 'admin'
-
   const value = {
     user,
     profile,
@@ -139,7 +124,7 @@ export function AuthProvider({ children }) {
     signIn,
     signOut,
     updateProfile,
-    isAdmin,
+    isAdmin: profile?.role === 'admin',
     refreshProfile: () => fetchProfile(user?.id),
   }
 
@@ -148,8 +133,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }
