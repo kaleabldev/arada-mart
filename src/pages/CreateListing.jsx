@@ -35,7 +35,6 @@ export default function CreateListing() {
   })
 
   const [images, setImages] = useState([])
-  const [imageFiles, setImageFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -92,7 +91,6 @@ export default function CreateListing() {
 
       const uploadedUrls = await Promise.all(uploadPromises)
       setImages((prev) => [...prev, ...uploadedUrls])
-      setImageFiles((prev) => [...prev, ...files])
     } catch (err) {
       setError('Failed to upload images')
       console.error(err)
@@ -103,7 +101,6 @@ export default function CreateListing() {
 
   const removeImage = (index) => {
     setImages((prev) => prev.filter((_, i) => i !== index))
-    setImageFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleLocationClick = () => {
@@ -125,18 +122,35 @@ export default function CreateListing() {
     }
   }
 
+  const validateForm = () => {
+    if (!formData.title.trim()) return 'Title is required'
+    if (formData.title.length < 5) return 'Title must be at least 5 characters'
+    if (!formData.description.trim()) return 'Description is required'
+    if (formData.description.length < 20) return 'Description must be at least 20 characters'
+    if (!formData.category) return 'Category is required'
+    if (!formData.price || formData.price <= 0) return 'Valid price is required'
+    if (images.length === 0) return 'At least one image is required'
+    return null
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setCreditError('')
 
-    if (!isEditing) {
-      // Check listing limit
-      const activeCount = profile?.free_listings_used || 0
-      const credits = profile?.listing_credits || 0
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
 
-      if (activeCount >= 1 && credits <= 0) {
-        setCreditError('You have used your free listing. Purchase credits to post more listings. Contact support or admin will add manually.')
+    if (!isEditing) {
+      // Check listing limit based on credits and free_listings_used
+      const freeUsed = profile?.free_listings_used || 0
+      const credits = profile?.credits || 0
+
+      if (freeUsed >= 1 && credits <= 0) {
+        setCreditError('You have used your free listing. Purchase credits to post more listings.')
         return
       }
     }
@@ -150,13 +164,12 @@ export default function CreateListing() {
         images,
       }
 
-      let error
       if (isEditing) {
         const { error: updateError } = await supabase
           .from('listings')
           .update(listingData)
           .eq('id', id)
-        error = updateError
+        if (updateError) throw updateError
       } else {
         const { error: insertError } = await supabase
           .from('listings')
@@ -164,13 +177,11 @@ export default function CreateListing() {
             ...listingData,
             seller_id: user.id,
           })
-        error = insertError
+        if (insertError) throw insertError
       }
 
-      if (error) throw error
-
       await refreshProfile()
-      navigate(isEditing ? `/listing/${id}` : '/')
+      navigate(isEditing ? `/listing/${id}` : '/profile')
     } catch (err) {
       setError(err.message || 'Failed to save listing')
     } finally {
@@ -187,7 +198,7 @@ export default function CreateListing() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">
         {isEditing ? 'Edit Listing' : 'Create New Listing'}
       </h1>
@@ -199,7 +210,7 @@ export default function CreateListing() {
             <div>
               <p className="font-medium">Listing Limit Reached</p>
               <p className="text-sm mt-1">{creditError}</p>
-              <p className="text-sm mt-2">Current credits: {profile?.listing_credits || 0}</p>
+              <p className="text-sm mt-2">Current credits: {profile?.credits || 0}</p>
             </div>
           </div>
         </div>
@@ -215,7 +226,7 @@ export default function CreateListing() {
         {/* Title */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Title *
+            Title * (Min 5 characters)
           </label>
           <input
             type="text"
@@ -231,7 +242,7 @@ export default function CreateListing() {
         {/* Description */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Description *
+            Description * (Min 20 characters)
           </label>
           <textarea
             required
@@ -244,72 +255,72 @@ export default function CreateListing() {
           />
         </div>
 
-        {/* Price */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Price (ETB) *
-          </label>
-          <input
-            type="number"
-            required
-            min="1"
-            value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-            className="w-full px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            placeholder="e.g., 25000"
-          />
+        {/* Price and Negotiable */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Price (ETB) *
+            </label>
+            <input
+              type="number"
+              required
+              min="1"
+              value={formData.price}
+              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+              className="w-full px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="e.g., 25000"
+            />
+          </div>
+          <div className="flex items-center pt-8">
+            <input
+              type="checkbox"
+              id="negotiable"
+              checked={formData.negotiable}
+              onChange={(e) => setFormData({ ...formData, negotiable: e.target.checked })}
+              className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-primary-500 focus:ring-primary-500"
+            />
+            <label htmlFor="negotiable" className="ml-2 text-sm text-slate-300">
+              Price is negotiable
+            </label>
+          </div>
         </div>
 
-        {/* Negotiable */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="negotiable"
-            checked={formData.negotiable}
-            onChange={(e) => setFormData({ ...formData, negotiable: e.target.checked })}
-            className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-primary-500 focus:ring-primary-500"
-          />
-          <label htmlFor="negotiable" className="ml-2 text-sm text-slate-300">
-            Price is negotiable
-          </label>
-        </div>
-
-        {/* Category */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Category *
-          </label>
-          <select
-            required
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Condition */}
-        <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">
-            Condition *
-          </label>
-          <select
-            required
-            value={formData.condition}
-            onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
-            className="w-full px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            {CONDITIONS.map((cond) => (
-              <option key={cond} value={cond}>
-                {CONDITION_LABELS[cond]}
-              </option>
-            ))}
-          </select>
+        {/* Category and Condition */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Category *
+            </label>
+            <select
+              required
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              className="w-full px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Condition *
+            </label>
+            <select
+              required
+              value={formData.condition}
+              onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
+              className="w-full px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {CONDITIONS.map((cond) => (
+                <option key={cond} value={cond}>
+                  {CONDITION_LABELS[cond]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Location */}
@@ -335,17 +346,12 @@ export default function CreateListing() {
               <MapPin size={20} />
             </button>
           </div>
-          {formData.latitude && (
-            <p className="text-xs text-slate-400 mt-1">
-              Location coordinates captured
-            </p>
-          )}
         </div>
 
         {/* Images */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
-            Images (up to 5)
+            Images * (up to 5)
           </label>
           <div className="flex items-center gap-4">
             <label className="flex items-center px-4 py-3 border border-slate-600 rounded-md bg-slate-800 text-slate-300 hover:bg-slate-700 cursor-pointer">

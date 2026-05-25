@@ -69,14 +69,18 @@ export function AuthProvider({ children }) {
           email: data.user.email,
           name,
           free_listings_used: 0,
-          listing_credits: 0,
+          credits: 0,
           role: 'user',
         })
 
         if (profileError) throw profileError
 
         // Send welcome email
-        await sendWelcomeEmail(email, name)
+        try {
+          await sendWelcomeEmail(email, name)
+        } catch (emailErr) {
+          console.error('Failed to send welcome email:', emailErr)
+        }
       }
 
       return { data, error: null }

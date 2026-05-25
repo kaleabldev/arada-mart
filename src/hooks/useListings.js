@@ -94,11 +94,8 @@ export function useListing(id) {
       if (error) throw error
       setListing(data)
 
-      // Increment view count
-      await supabase
-        .from('listings')
-        .update({ view_count: (data.view_count || 0) + 1 })
-        .eq('id', id)
+      // Increment view count using RPC
+      await supabase.rpc('increment_listing_views', { listing_id: id })
     } catch (err) {
       setError(err.message)
     } finally {
